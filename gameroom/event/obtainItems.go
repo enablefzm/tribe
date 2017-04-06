@@ -3,7 +3,17 @@ package event
 import (
 	"fmt"
 	"tribe/gameroom/item"
+	"vava6/vatools"
 )
+
+// 构造物品奖励对象
+func NewObtainItems(ptObtain *Obtain, db string) *ObtainItems {
+	pt := &ObtainItems{
+		Obtain: ptObtain,
+		itemId: vatools.SInt(db),
+	}
+	return pt
+}
 
 // 这是物品奖励
 type ObtainItems struct {

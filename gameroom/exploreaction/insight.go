@@ -16,7 +16,7 @@ func NewInsight(actValue int) *Insight {
 }
 
 func (this *Insight) GetActTypeOnID() uint8 {
-	return constvalue.ACT_TREASURE
+	return constvalue.ACT_INSIGHT
 }
 
 func (this *Insight) GetActName() string {

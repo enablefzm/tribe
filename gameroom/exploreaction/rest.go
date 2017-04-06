@@ -8,9 +8,9 @@ type Rest struct {
 	*Action
 }
 
-func NewRest(actValue int) *Insight {
+func NewRest(actValue int) *Rest {
 	ptAction := NewAction(actValue)
-	return &Insight{
+	return &Rest{
 		ptAction,
 	}
 }

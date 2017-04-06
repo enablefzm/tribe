@@ -9,7 +9,6 @@ import (
 	"time"
 	"tribe/baseob"
 	"tribe/gameroom/event"
-	"tribe/gameroom/exploreaction"
 	"tribe/sqldb"
 	"vava6/vatools"
 )
@@ -215,13 +214,15 @@ func (this *Zone) JoinExploreQueue(ptQue *ExploreQueue) error {
 		err = errors.New("已存在这个探索队列")
 	} else {
 		this.mpExpque[ptQue.id] = true
+	}
+	this.lk.Unlock()
+	if err == nil {
 		ptQue.ChangeState(1)
 		ptQue.JoinZone(this.zoneID)
 		// 分配Field给指定的ExploreQueue
 		ptQue.zoneFields = this.CreatePlayerField()
 		ptQue.zoneFields.playerID = ptQue.leadID
 	}
-	this.lk.Unlock()
 	return err
 }
 
@@ -261,93 +262,6 @@ func (this *Zone) doAllExplore() {
 func (this *Zone) doExplore(ptQue *ExploreQueue) {
 	// 让探索队执行探索
 	ptQue.DoExplore()
-}
-
-// 将指定的探索队移动到下一个格子
-//	@parames
-//		*ExploreQueue		指定的探索队
-//	@return
-//		error				是否有错误发生
-func (this *Zone) moveQueueNextField(ptQue *ExploreQueue) error {
-	err := ptQue.MoveNextField()
-	if err != nil {
-		// 发生错误退出探索队
-		ptQue.SetStateQuit()
-	} else {
-		// 获取新的动作
-	}
-	return err
-}
-
-// 动作能力值和事件防守值对抗，对抗后获得事件对象随机值，随机值决定是否可以获得事件奖励
-//	@parames
-//		exploreaction.IFAction		// 动作对象
-//		*event.Event				// 事件对象
-//	@return
-//		uint16						// 对抗结果值用于是否可以获得事件奖励
-func (this *Zone) getFightEventRndValue(queueAct exploreaction.IFAction, et *event.Event) uint16 {
-	blnAdd := true
-	fightValue := queueAct.GetActValue() - et.GetDefense()
-	if fightValue < 0 {
-		fightValue *= -1
-		blnAdd = false
-	}
-	// 获取可以获得增加成功率的值
-	addRnd := uint16(float64(fightValue) / float64(et.GetDefense()) * float64(et.GetProbability()))
-	maxAddRnd := et.GetProbability() * 3
-	if addRnd > maxAddRnd {
-		addRnd = maxAddRnd
-	}
-	// 获取随机值
-	rndVal := uint16(vatools.CRnd(1, 1000))
-	if blnAdd == true {
-		if rndVal > addRnd {
-			rndVal -= addRnd
-		} else {
-			rndVal = 0
-		}
-	} else {
-		rndVal += addRnd
-	}
-	return rndVal
-}
-
-// 对探索队的一次检测并返回一个可以被探索的ZoneField
-//	@parames
-//		*ExploreQueue
-//	@return
-//		*FieldZone, bool(成功返回true, 失败返回false)
-func (this *Zone) getQueueFieldDb(ptQue *ExploreQueue) (*FieldZone, bool) {
-	// 获玩家地图当前格子
-	ptField := ptQue.zoneFields.GetNowField()
-	if ptField == nil {
-		ptQue.SetStateQuit()
-		ptQue.Log("你在", this.zoneName, "找不到方向了退出了")
-		return nil, false
-	}
-	// 获得Zone里的格子
-	dbField, err := this.getFieldDb(ptField.fieldID)
-	if err != nil {
-		ptQue.Log("你在", this.zoneName, "的探索地图好像不太准，退出了")
-		ptQue.SetStateQuit()
-		return nil, false
-	}
-	// 计算所需的食物
-	//  计算食物获取的须考虑未来高等级的探索队到低等级Zone里探索的消耗问题。
-	needFood := this.zoneFood
-	// 判断剩余食物
-	if ptQue.food < needFood {
-		// 食物不够无法探索
-		// 	之后将被清除探索队列
-		ptQue.SetStateQuit()
-		ptQue.Log("食物消耗完了退出")
-		return nil, false
-	}
-	// 扣除探索的消耗
-	ptQue.food -= needFood
-	fmt.Println("当前坐标：", ptQue.zoneFields.GetNowField().pointX, ptQue.zoneFields.GetNowField().pointY)
-	// 返回地图对象
-	return dbField, true
 }
 
 // 获取当前Zone里指定的DBField

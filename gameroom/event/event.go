@@ -45,6 +45,8 @@ func NewEvent(id int) (*Event, error) {
 	ptEvent.eventType = vatools.SUint8(rs["eventType"])
 	ptEvent.defense = vatools.SInt(rs["defense"])
 	ptEvent.probability = vatools.SUint16(rs["probability"])
+	// 生成奖励对象
+
 	// TODO...
 	// 加载各项奖励和需要触发的技能
 	return ptEvent, nil

@@ -270,6 +270,7 @@ type ExploreQueue struct {
 	expPower      *ExplorePower          // 畜力值
 	ptProportion  *vatools.Proportion    // 占比对象
 	nowAct        exploreaction.IFAction // 当前正在操作的动作
+	doCount       uint                   // 被探索的次数
 }
 
 func (this *ExploreQueue) AddItems(items *item.Items) {
@@ -353,28 +354,6 @@ func (this *ExploreQueue) DoExplore() {
 		this.SetStateQuit()
 		return
 	}
-	// 有动作完成上一次动作
-	if this.nowAct != nil {
-		// 有动作则执行结果
-		et, ok := ptFieldZone.GetEvent(this.nowAct.GetActTypeOnID())
-		if !ok {
-			this.doMoveNextField()
-		} else {
-			rndVal := this.getFightEventRndValue(this.nowAct, et)
-			if rndVal <= et.GetProbability() {
-				obtain, err := et.GetObtain()
-				if err != nil {
-					this.Log(this.nowAct.GetActName(), "时", et.GetName(), "但是什么都没有得到")
-				} else {
-					this.Log(fmt.Sprint(this.nowAct.GetActName(), "时", et.GetName(), "获得", obtain.GetInfo()))
-				}
-			} else {
-				if ok := this.GetExpPower().AddVal(this.nowAct.GetActTypeOnID()); !ok {
-					this.doMoveNextField()
-				}
-			}
-		}
-	}
 
 	// 获取要被消耗的食物计算方法，未定
 	needFood := ptZone.zoneFood
@@ -382,9 +361,46 @@ func (this *ExploreQueue) DoExplore() {
 		this.SetStateQuit()
 		return
 	}
-	// 没有动作选择动作
-	if ok := this.CreateAct(); !ok {
-		this.doMoveNextField()
+	this.food -= needFood
+	this.doCount++
+	fmt.Println("==================当前次数", this.doCount, "当前位置", nowField.pointX, nowField.pointY, "=========================")
+	// 有动作完成上一次动作
+	if this.nowAct != nil {
+		fmt.Println("执行当前动作", this.nowAct.GetActName())
+		// 有动作则执行结果
+		et, ok := ptFieldZone.GetEvent(this.nowAct.GetActTypeOnID())
+		if !ok {
+			fmt.Println("当前动作执行失败")
+			this.doMoveNextField()
+		} else {
+			// 探索能力值和FieldDb对抗，获得结果
+			rndVal := this.getFightEventRndValue(this.nowAct, et)
+			// 结果小于概率
+			if rndVal <= et.GetProbability() {
+				obtain, err := et.GetObtain()
+				if err != nil {
+					this.Log(this.nowAct.GetActName(), "时", et.GetName(), "但是什么都没有得到")
+				} else {
+					obtain.ObtainDo(this)
+					this.Log(fmt.Sprint(this.nowAct.GetActName(), "时", et.GetName(), "获得", obtain.GetInfo()))
+				}
+				this.doMoveNextField()
+			} else {
+				if ok := this.GetExpPower().AddVal(this.nowAct.GetActTypeOnID()); !ok {
+					fmt.Println("事件没触发，增加值失败，跳到下一个格子")
+					this.doMoveNextField()
+				} else {
+					fmt.Println("增加Powe成功，当前值为", this.GetExpPower().PowerValue)
+				}
+			}
+		}
+		_ = this.CreateAct()
+	} else {
+		// 没有动作选择动作
+		fmt.Println("探索队没有选择动作")
+		if ok := this.CreateAct(); !ok {
+			this.doMoveNextField()
+		}
 	}
 }
 
@@ -530,7 +546,7 @@ func (this *ExploreQueue) LenHero() int {
 func (this *ExploreQueue) GetEventOnFieldDb(ptField *FieldDb) (exploreaction.IFAction, bool) {
 	if this.expPower.PowerValue > 0 {
 		// 有记录上一次的动作暴发直接返回上一次的动作
-		fmt.Println("返回上一次动作:", this.expPower.PowerType)
+		fmt.Println("返回上一次动作:", this.IdxAction(this.expPower.PowerType).GetActName())
 		return this.IdxAction(this.expPower.PowerType), true
 	} else {
 		acts := ptField.GetActs()
@@ -548,7 +564,7 @@ func (this *ExploreQueue) GetEventOnFieldDb(ptField *FieldDb) (exploreaction.IFA
 		// 通过分配器返回概率性的动作Key，能力值越高的动作越高机率返回
 		actKey := pPro.GetRndKey()
 		// 通过动作字符串的Key返回相应的动作
-		fmt.Println("获取新的动作：", this.KeyAction(actKey).GetActTypeOnID())
+		fmt.Println("获取新的动作：", this.KeyAction(actKey).GetActName())
 		return this.KeyAction(actKey), true
 	}
 }
@@ -624,9 +640,15 @@ func (this *ExploreQueue) ChangeState(state uint8) {
 }
 
 // 标记为新的Zone标识
+//	当被加入新Zone时执行的操作
 func (this *ExploreQueue) JoinZone(zoneId int) {
 	this.zoneID = zoneId
 	this.expPower.Reset()
+	this.doCount = 0
+	// 清除默认动作并创建新动作
+	// this.nowAct = this.actRest
+	_ = this.CreateAct()
+	fmt.Println("加入到", zoneId, "当前默认动作是：", this.nowAct.GetActName())
 }
 
 // 获得当前探索队可以执行的动作
@@ -686,9 +708,11 @@ func (this *ExploreQueue) initItemsToJson() string {
 //		ptItems item.Items 	物品对象指针
 //	@return
 //		void
-func (this *ExploreQueue) ExprloreGetItems(ptItems *item.Items) {
+func (this *ExploreQueue) ExploreGetItems(ptItems *item.Items) {
 	// 记录物品
 	fmt.Println("探索获得物品：", ptItems.ItemName(), ptItems.GetHow())
+	// 放进包里
+	this.arrItems = append(this.arrItems, ptItems)
 }
 
 func (this *ExploreQueue) Save() error {
