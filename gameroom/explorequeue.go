@@ -359,50 +359,67 @@ func (this *ExploreQueue) DoExplore() {
 		et, ok := ptFieldZone.GetEvent(this.nowAct.GetActTypeOnID())
 		if !ok {
 			this.doMoveNextField()
-			return
-		}
-		rndVal := this.getFightEventRndValue(this.nowAct, et)
-		if rndVal <= et.GetProbability() {
-			obtain, err := et.GetProbability()
-			if err != nil {
-				this.Log(queueAct.GetActName(), "时", et.GetName(), "但是什么都没有得到")
-			} else {
-				ptQue.Log(fmt.Sprint(queueAct.GetActName(), "时", et.GetName(), "获得", obtain.GetInfo()))
-			}
 		} else {
-			if ok := this.GetExpPower().AddVal(this.nowAct.GetActTypeOnID()); !ok {
-				this.doMoveNextField()
+			rndVal := this.getFightEventRndValue(this.nowAct, et)
+			if rndVal <= et.GetProbability() {
+				obtain, err := et.GetObtain()
+				if err != nil {
+					this.Log(this.nowAct.GetActName(), "时", et.GetName(), "但是什么都没有得到")
+				} else {
+					this.Log(fmt.Sprint(this.nowAct.GetActName(), "时", et.GetName(), "获得", obtain.GetInfo()))
+				}
+			} else {
+				if ok := this.GetExpPower().AddVal(this.nowAct.GetActTypeOnID()); !ok {
+					this.doMoveNextField()
+				}
 			}
 		}
 	}
 
 	// 获取要被消耗的食物计算方法，未定
-	//	TODO...
-	//	needFood := ptZone.zoneFood
-	//	if this.food < needFood {
-	//		this.SetStateQuit()
-	//		return
-	//	}
-	//	// 没有动作选择动作
-	//	var ok bool
-	//	if this.nowAct, ok = this.GetEventOnFieldDb(ptFieldZone.FieldDb); !ok {
-	//		this.doMoveNextField()
-	//	}
+	needFood := ptZone.zoneFood
+	if this.food < needFood {
+		this.SetStateQuit()
+		return
+	}
+	// 没有动作选择动作
+	if ok := this.CreateAct(); !ok {
+		this.doMoveNextField()
+	}
 }
 
 // 通过当前地形获得动作
-func (this *ExploreQueue) CreateAct() {
+//	@return
+//		boolean   	操作结果，成功返回true 失败返回false
+func (this *ExploreQueue) CreateAct() bool {
+	// 清除当前的动作并设定为休息
+	this.nowAct = this.actRest
 	if this.CheckIsQuit() {
-		return
+		return false
 	}
 	ptZone, err := OBManageZone.GetCanchZone(this.zoneID)
 	if err != nil {
 		this.SetStateQuit()
-		return
+		return false
 	}
-	// Debug
+	// 获取当前所在Zone的格子
 	nowField, err := this.zoneFields.GetNowFieldErr()
-
+	if err != nil {
+		this.SetStateQuit()
+		return false
+	}
+	// 获取Zone里的DB对象
+	ptFieldZone, err := ptZone.getFieldDb(nowField.fieldID)
+	if err != nil {
+		return false
+	}
+	// 通过FieldDb选择某种动作
+	var ok bool
+	this.nowAct, ok = this.GetEventOnFieldDb(ptFieldZone.FieldDb)
+	if !ok {
+		return false
+	}
+	return true
 }
 
 // 动作能力值和事件防守值对抗，对抗后获得事件对象随机值，随机值决定是否可以获得事件奖励

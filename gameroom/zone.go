@@ -259,48 +259,8 @@ func (this *Zone) doAllExplore() {
 //	@parames
 //		ptQue	*ExploreQueue	要被执行玩家探索队
 func (this *Zone) doExplore(ptQue *ExploreQueue) {
-	// 判断是否是已离开探索队列
-	if ptQue.CheckIsQuit() {
-		return
-	}
-	// 获得Zone的DBField
-	dbField, ok := this.getQueueFieldDb(ptQue)
-	if !ok {
-		return
-	}
-	// 获取探索动作
-	queueAct, ok := ptQue.GetEventOnFieldDb(dbField.FieldDb)
-	if !ok {
-		// 这个格子里没有可以执行的动作，跳到下一格
-		_ = this.moveQueueNextField(ptQue)
-		return
-	}
-	// 获取对抗获取事件
-	et, ok := dbField.GetEvent(queueAct.GetActTypeOnID())
-	if !ok {
-		_ = this.moveQueueNextField(ptQue)
-		return
-	}
-	// 事件对抗 攻击值 - 事件防守值
-	rndVal := this.getFightEventRndValue(queueAct, et)
-	// 判断是否成功
-	if rndVal <= et.GetProbability() {
-		// 成功
-		obtain, err := et.GetObtain()
-		if err != nil {
-			// 日志
-			ptQue.Log(fmt.Sprint(queueAct.GetActName(), "时", et.GetName(), "但是什么都没有得到"))
-		} else {
-			ptQue.Log(fmt.Sprint(queueAct.GetActName(), "时", et.GetName(), "获得", obtain.GetInfo()))
-		}
-		// 跳到下一个格子
-		_ = this.moveQueueNextField(ptQue)
-	} else {
-		// 加到累计值
-		if ok := ptQue.GetExpPower().AddVal(queueAct.GetActTypeOnID()); !ok {
-			_ = this.moveQueueNextField(ptQue)
-		}
-	}
+	// 让探索队执行探索
+	ptQue.DoExplore()
 }
 
 // 将指定的探索队移动到下一个格子
