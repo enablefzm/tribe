@@ -24,6 +24,7 @@ type Hero struct {
 	leadID       int               // 所属角色ID
 	name         string            // 英雄名称
 	heroType     uint8             // 英雄类型
+	epic         bool              // 是否是史实英雄
 	quality      uint8             // 英雄品质
 	exp          int               // 经验值
 	level        int               // 等级
@@ -66,7 +67,7 @@ func NewHero(id int) (*Hero, error) {
 }
 
 // 通过英雄类型和品质创建英雄
-func NewCreateHero(heroType, quality uint8) iHero {
+func NewCreateHero(heroType, quality uint8) IFHero {
 	obHero := &Hero{
 		name:     vatools.OBCreateName.GetName(),
 		heroType: heroType,
@@ -111,22 +112,7 @@ func NewCreateHero(heroType, quality uint8) iHero {
 		}
 	}
 	// 生成相应类型的英雄对象
-	var resHero iHero
-	switch obHero.heroType {
-	// 生成战士
-	case 1:
-		resHero = NewWarrior(obHero)
-	// 生成猎人
-	case 2:
-		resHero = NewHunter(obHero)
-	// 生成巫师
-	case 3:
-		resHero = NewWizard(obHero)
-	// 生成图腾师 4
-	default:
-		resHero = NewTotem(obHero)
-	}
-	return resHero
+	return NewIFHero(obHero)
 }
 
 func (this *Hero) GetID() int {
@@ -136,6 +122,61 @@ func (this *Hero) GetID() int {
 // 获取英雄名称
 func (this *Hero) GetName() string {
 	return this.name
+}
+
+// 获得攻击力
+func (this *Hero) GetAtt() (int, int) {
+	return this.minAtt, this.maxAtt
+}
+
+// 获得攻击速度
+func (this *Hero) GetSpeed() int {
+	return this.speed
+}
+
+// 获得力量
+func (this *Hero) GetPower() int {
+	return this.power
+}
+
+// 获得体力
+func (this *Hero) GetStamina() int {
+	return this.stamina
+}
+
+// 获得敏捷
+func (this *Hero) GetAgile() int {
+	return this.agile
+}
+
+// 获得智力
+func (this *Hero) GetIq() int {
+	return this.iq
+}
+
+// 获得防御力
+func (this *Hero) GetDef() int {
+	return this.def
+}
+
+// 获得命中
+func (this *Hero) GetHit() int {
+	return this.hit
+}
+
+// 获得暴击
+func (this *Hero) GetCrit() int {
+	return this.crit
+}
+
+// 获得闪避
+func (this *Hero) GetDodge() int {
+	return this.dodge
+}
+
+// 英雄所属的角色ID
+func (this *Hero) GetLeadID() int {
+	return this.leadID
 }
 
 func (this *Hero) SetLeadID(leadID int) {
@@ -156,6 +197,10 @@ func (this *Hero) GetInfo() map[string]interface{} {
 // 一分钟需要消耗的食物量
 func (this *Hero) NeedFood() int {
 	return 2
+}
+
+func (this *Hero) IsEpic() bool {
+	return this.epic
 }
 
 // 向角色添加经验
@@ -221,6 +266,11 @@ func (this *Hero) Save() error {
 		delete(saveMap, "heroType")
 		delete(saveMap, "upPoint")
 		delete(saveMap, "mainPoint")
+	}
+	if this.IsEpic() {
+		saveMap["epic"] = 1
+	} else {
+		saveMap["epic"] = 0
 	}
 	// 保存装备ID
 	if this.pChest != nil {

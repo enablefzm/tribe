@@ -3,6 +3,7 @@ package event
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"tribe/baseob"
 	"vava6/vatools"
 )
@@ -34,7 +35,6 @@ func NewEvent(id int) (*Event, error) {
 		BaseOB:     baseob.NewBaseOB("d_event", "*", "id", map[string]interface{}{"id": id}),
 		id:         id,
 		mustSkills: make([]IFSkill, 0),
-		obtains:    make([]IFObtain, 0, 2),
 	}
 	rs, err := ptEvent.LoadDbOnIdx(id)
 	if err != nil {
@@ -46,7 +46,21 @@ func NewEvent(id int) (*Event, error) {
 	ptEvent.defense = vatools.SInt(rs["defense"])
 	ptEvent.probability = vatools.SUint16(rs["probability"])
 	// 生成奖励对象
-
+	arr := strings.Split(rs["obtains"], ",")
+	il := len(arr)
+	ptEvent.obtains = make([]IFObtain, il)
+	var j int
+	for i := 0; i < il; i++ {
+		ptObtain, err := NewIFObtain(vatools.SInt(arr[i]))
+		if err != nil {
+			continue
+		}
+		ptEvent.obtains[j] = ptObtain
+		j++
+	}
+	if j != il {
+		ptEvent.obtains = ptEvent.obtains[0:j]
+	}
 	// TODO...
 	// 加载各项奖励和需要触发的技能
 	return ptEvent, nil

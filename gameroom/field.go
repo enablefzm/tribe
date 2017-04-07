@@ -31,6 +31,7 @@ func (this *Field) GetFieldInfo() map[string]interface{} {
 		"pointX": this.pointX,
 		"pointY": this.pointY,
 		"musts":  this.musts,
+		"after":  this.after,
 	}
 }
 
@@ -41,5 +42,6 @@ func (this *Field) GetJsonDB() *jsondb.Field {
 	res.PointX = this.pointX
 	res.PointY = this.pointY
 	res.Musts = this.musts
+	res.After = this.after
 	return res
 }

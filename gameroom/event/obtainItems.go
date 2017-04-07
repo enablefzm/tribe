@@ -1,6 +1,7 @@
 package event
 
 import (
+	"errors"
 	"fmt"
 	"tribe/gameroom/item"
 	"vava6/vatools"
@@ -40,6 +41,22 @@ func (this *ObtainItems) ObtainDo(iQueue IFExploreQueue) {
 	iQueue.ExploreGetItems(ptItems)
 }
 
+func (this *ObtainItems) createItem() (*item.Items, error) {
+	how := this.getRndValue()
+	if how < 1 {
+		return nil, errors.New("NULL")
+	}
+	ptItems, err := item.NewItems(this.itemId, how)
+	if err != nil {
+		return nil, err
+	}
+	return ptItems, nil
+}
+
 func (this *ObtainItems) GetInfo() string {
-	return "获得了物品"
+	ptItems, err := this.createItem()
+	if err != nil {
+		return err.Error()
+	}
+	return fmt.Sprint("获得了物品", ptItems.ItemName(), ptItems.GetHow())
 }

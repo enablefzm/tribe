@@ -12,6 +12,7 @@ import (
 	"tribe/gameroom/exploreaction"
 	"tribe/gameroom/hero"
 	"tribe/gameroom/item"
+	"tribe/jsondb"
 	"tribe/sqldb"
 	"vava6/vatools"
 )
@@ -216,13 +217,14 @@ func NewExplore(id int) (*ExploreQueue, error) {
 //		*ExploreQueue
 func NewExploreQueueOnRS(rs map[string]string) *ExploreQueue {
 	ob := &ExploreQueue{
-		actHunt:       exploreaction.NewHunt(1000),
-		actTreasure:   exploreaction.NewTreasure(100),
-		actCollection: exploreaction.NewCollection(20),
-		actInsight:    exploreaction.NewInsight(500),
+		actHunt:       exploreaction.NewHunt(0),
+		actTreasure:   exploreaction.NewTreasure(0),
+		actCollection: exploreaction.NewCollection(0),
+		actInsight:    exploreaction.NewInsight(0),
 		actRest:       exploreaction.NewRest(0),
 		expPower:      NewExplorePower(),
 		arrLogs:       make([]string, 0, 50),
+		arrHeroID:     make([]int, 0, 5),
 	}
 	ob.id = vatools.SInt(rs["id"])
 	ob.leadID = vatools.SInt(rs["leadID"])
@@ -230,10 +232,12 @@ func NewExploreQueueOnRS(rs map[string]string) *ExploreQueue {
 	ob.zoneID = vatools.SInt(rs["zoneID"])
 	ob.startTime = vatools.STime(rs["startTime"]).Unix()
 	ob.findHow = vatools.SUint(rs["findHow"])
+	ob.state = vatools.SUint8(rs["state"])
 	// 构造已查找到的物品信息
 	ob.initItems(rs["items"])
 	// 构造玩家地图
 	ob.initZoneFields(rs["zoneFields"])
+	ob.initDb(rs["db"])
 	// 设定DB信息
 	ob.SetDBInfo("u_explorequeue", "*", "id", map[string]interface{}{"id": ob.id, "leadID": ob.leadID})
 	ob.SetNew(false)
@@ -248,7 +252,6 @@ type ExploreQueue struct {
 	zoneID        int
 	food          int
 	findHow       uint                   // 已探索次数
-	physical      uint16                 // 体能值
 	state         uint8                  // 探索队状态（0-空闲、1-正在探索中）
 	eState        uint16                 // 探索中的状态（0：休息、1：行走、2：探索，3：采集、4：挖矿，）
 	startTime     int64                  // 探索开始时间
@@ -270,7 +273,6 @@ type ExploreQueue struct {
 	expPower      *ExplorePower          // 畜力值
 	ptProportion  *vatools.Proportion    // 占比对象
 	nowAct        exploreaction.IFAction // 当前正在操作的动作
-	doCount       uint                   // 被探索的次数
 }
 
 func (this *ExploreQueue) AddItems(items *item.Items) {
@@ -283,6 +285,29 @@ func (this *ExploreQueue) AddItems(items *item.Items) {
 		}
 	}
 	this.arrItems = append(this.arrItems, items)
+}
+
+// 初始化DB数据
+func (this *ExploreQueue) initDb(strJson string) {
+	var db DBExploreQueue
+	jsondb.JsdbUnJson(strJson, &db)
+	// 将DB数据初始化对象
+	this.expPower.PowerType = db.ExpPowerType
+	this.expPower.PowerValue = db.ExpPowerValue
+	switch db.NowAct {
+	case constvalue.ACT_COLLECTION:
+		this.nowAct = this.actCollection
+	case constvalue.ACT_HUNT:
+		this.nowAct = this.actHunt
+	case constvalue.ACT_INSIGHT:
+		this.nowAct = this.actInsight
+	case constvalue.ACT_TREASURE:
+		this.nowAct = this.actTreasure
+	default:
+		this.nowAct = this.actRest
+	}
+	// 初始化英雄对象
+	this.initHeros(db.Heros)
 }
 
 // 初始化已查询到商品信息
@@ -315,6 +340,18 @@ func (this *ExploreQueue) initItems(strJson string) {
 func (this *ExploreQueue) initZoneFields(strJson string) {
 	// 转换为对象
 	this.zoneFields = NewFieldPlayerOnJson(strJson)
+}
+
+// 初始化英雄对象信息
+func (this *ExploreQueue) initHeros(arrHeroID []int) {
+	for _, id := range arrHeroID {
+		// 获得英雄对象
+		ptHero, err := hero.OBManageHero.GetCacheHero(id)
+		if err != nil {
+			continue
+		}
+		this.JoinHero(ptHero)
+	}
 }
 
 // 记录玩家日志
@@ -362,8 +399,8 @@ func (this *ExploreQueue) DoExplore() {
 		return
 	}
 	this.food -= needFood
-	this.doCount++
-	fmt.Println("==================当前次数", this.doCount, "当前位置", nowField.pointX, nowField.pointY, "=========================")
+	this.findHow++
+	fmt.Println("==================当前次数", this.findHow, "当前位置", nowField.pointX, nowField.pointY, "=========================")
 	// 有动作完成上一次动作
 	if this.nowAct != nil {
 		fmt.Println("执行当前动作", this.nowAct.GetActName())
@@ -525,13 +562,18 @@ func (this *ExploreQueue) GetProportion() *vatools.Proportion {
 //		*Hero	英雄对象
 //	@return
 //		error	是否成功
-func (this *ExploreQueue) JoinHero(obHero *hero.Hero) error {
+func (this *ExploreQueue) JoinHero(obHero hero.IFHero) error {
 	if uint8(len(this.arrHeroID)) >= this.maxHero {
 		return errors.New("1")
+	}
+	// 英雄不属于这个角色
+	if obHero.GetLeadID() != this.leadID {
+		return errors.New("2")
 	}
 	this.arrHeroID = append(this.arrHeroID, obHero.GetID())
 	// 改变探索值
 	// Todo....
+
 	return nil
 }
 
@@ -644,9 +686,8 @@ func (this *ExploreQueue) ChangeState(state uint8) {
 func (this *ExploreQueue) JoinZone(zoneId int) {
 	this.zoneID = zoneId
 	this.expPower.Reset()
-	this.doCount = 0
+	this.findHow = 0
 	// 清除默认动作并创建新动作
-	// this.nowAct = this.actRest
 	_ = this.CreateAct()
 	fmt.Println("加入到", zoneId, "当前默认动作是：", this.nowAct.GetActName())
 }
@@ -698,7 +739,6 @@ func (this *ExploreQueue) initItemsToJson() string {
 		return ""
 	}
 	result := string(btVal)
-	fmt.Println("保存的信息JSON", result)
 	return result
 }
 
@@ -711,8 +751,27 @@ func (this *ExploreQueue) initItemsToJson() string {
 func (this *ExploreQueue) ExploreGetItems(ptItems *item.Items) {
 	// 记录物品
 	fmt.Println("探索获得物品：", ptItems.ItemName(), ptItems.GetHow())
+	if ptItems.Superposition() {
+		for _, v := range this.arrItems {
+			if v.ItemID() == ptItems.ItemID() {
+				v.OperateHow(ptItems.GetHow())
+				return
+			}
+		}
+	}
 	// 放进包里
 	this.arrItems = append(this.arrItems, ptItems)
+}
+
+// 将DB数据库转为相应的Json格式数据
+func (this *ExploreQueue) initDbToJson() string {
+	strJson, _ := jsondb.JsdbJson(&DBExploreQueue{
+		NowAct:        this.nowAct.GetActTypeOnID(),
+		ExpPowerType:  this.GetExpPower().PowerType,
+		ExpPowerValue: this.GetExpPower().PowerValue,
+		Heros:         this.arrHeroID,
+	})
+	return strJson
 }
 
 func (this *ExploreQueue) Save() error {
@@ -721,11 +780,11 @@ func (this *ExploreQueue) Save() error {
 	saveMap["zoneID"] = this.zoneID
 	saveMap["startTime"] = vatools.GetTimeString(this.startTime)
 	saveMap["findHow"] = this.findHow
-	saveMap["physical"] = this.physical
 	saveMap["state"] = this.state
 	// 保存现在的物品
 	saveMap["items"] = this.initItemsToJson()
 	saveMap["zoneFields"] = this.zoneFields.GetJsonSave()
+	saveMap["db"] = this.initDbToJson()
 	this.SetInfo(saveMap)
 	blnNew := this.IsNew()
 	if blnNew {
@@ -737,4 +796,11 @@ func (this *ExploreQueue) Save() error {
 		this.SetDBInfo("u_explorequeue", "*", "id", map[string]interface{}{"id": this.id, "leadID": this.leadID})
 	}
 	return err
+}
+
+type DBExploreQueue struct {
+	NowAct        uint8
+	ExpPowerType  uint8
+	ExpPowerValue uint8
+	Heros         []int
 }

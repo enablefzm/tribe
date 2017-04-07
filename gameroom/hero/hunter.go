@@ -13,7 +13,7 @@ func NewHunter(iptHero *Hero) *hunter {
 	ob := &hunter{
 		iptHero,
 	}
-	ob.heroType = 2
+	ob.heroType = H_HUNTER
 	ob.eventUpLevel = ob.UpLevel
 	return ob
 }

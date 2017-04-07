@@ -262,6 +262,9 @@ func (this *Item) GetFieldInfo() map[string]interface{} {
 	return res
 }
 
+// 是否可以叠加
+//	@return
+//		bool	true为可以叠加 false不能叠加
 func (this *Item) Superposition() bool {
 	return this.superposition
 }

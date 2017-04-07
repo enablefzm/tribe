@@ -13,7 +13,7 @@ func NewWizard(iptHero *Hero) *wizard {
 	ob := &wizard{
 		iptHero,
 	}
-	ob.heroType = 3
+	ob.heroType = H_WIZARD
 	ob.eventUpLevel = ob.UpLevel
 	return ob
 }

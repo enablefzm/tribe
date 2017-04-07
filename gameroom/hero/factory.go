@@ -5,7 +5,7 @@ import (
 )
 
 // 通过酒馆生成英雄
-func CreatePub() iHero {
+func CreatePub() IFHero {
 	// 随机英雄类型
 	rndHeroType := vatools.CRnd(1, 4)
 	// 获取品质

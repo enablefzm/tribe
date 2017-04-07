@@ -13,7 +13,7 @@ func NewTotem(iptHero *Hero) *totem {
 	ob := &totem{
 		iptHero,
 	}
-	ob.heroType = 4
+	ob.heroType = H_TOTEM
 	ob.eventUpLevel = ob.UpLevel
 	return ob
 }
