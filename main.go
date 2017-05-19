@@ -41,7 +41,7 @@ func doCmd(player *gameroom.Player, strCmd string) {
 //		Conn vaconn.MConn	类型的连接
 func handleNewPlayerConn(Conn vaconn.MConn) {
 	defer Conn.Close()
-	Conn.Send(fmt.Sprintln("*** 欢迎来到【", obTribe.GetTribeWordInfo(), "】***"))
+	Conn.Send(fmt.Sprintln("欢迎来到【", obTribe.GetTribeWordInfo(), "】"))
 	player := obTribe.CreateNewLinkPlayer(Conn)
 	for {
 		strCmd, err := Conn.Read()

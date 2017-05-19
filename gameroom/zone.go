@@ -9,6 +9,7 @@ import (
 	"time"
 	"tribe/baseob"
 	"tribe/gameroom/event"
+	"tribe/gameroom/item"
 	"tribe/sqldb"
 	"vava6/vatools"
 )
@@ -85,28 +86,30 @@ func (this *ManageZone) Save() error {
 //	玩家探索的区域
 type Zone struct {
 	baseob.BaseOB
-	zoneID      int                // zoneID
-	zoneName    string             // zone名称
-	zoneLevel   int                // 等级
-	zoneType    int8               // zone类型 0-PVE 1-PVP
-	zoneArea    int                // zone面积
-	zoneFood    int                // zone消耗的食物的基数
-	zoneImg     string             // 图标
-	zoneMsg     string             // 描述
-	zoneEvents  []*event.Event     // 事件列表共公事件
-	mpExpque    map[int]bool       // 当前Zone探索中的探索队伍
-	mpField     map[int]*FieldZone // 格子对象
-	lk          *sync.RWMutex      // mpExpque锁
-	chExpQue    chan *ExploreQueue // 添加到当前探索队列
-	tmpHowField uint16             // 临时存放的可以生成的格子数量
+	zoneID        int                // zoneID
+	zoneName      string             // zone名称
+	zoneLevel     int                // 等级
+	zoneType      int8               // zone类型 0-PVE 1-PVP
+	zoneArea      int                // zone面积
+	zoneFood      int                // zone消耗的食物的基数
+	zoneImg       string             // 图标
+	zoneMsg       string             // 描述
+	zoneInfoItems []*item.Item       // 这个区域可以掉落的物品信息
+	zoneEvents    []*event.Event     // 事件列表共公事件
+	mpExpque      map[int]bool       // 当前Zone探索中的探索队伍
+	mpField       map[int]*FieldZone // 格子对象
+	lk            *sync.RWMutex      // mpExpque锁
+	chExpQue      chan *ExploreQueue // 添加到当前探索队列
+	tmpHowField   uint16             // 临时存放的可以生成的格子数量
 }
 
 func NewZone(zoneId int) (*Zone, error) {
 	ob := &Zone{
-		zoneID:   zoneId,
-		lk:       new(sync.RWMutex),
-		mpField:  make(map[int]*FieldZone, 10),
-		chExpQue: make(chan *ExploreQueue, 1000),
+		zoneID:        zoneId,
+		lk:            new(sync.RWMutex),
+		mpField:       make(map[int]*FieldZone, 10),
+		chExpQue:      make(chan *ExploreQueue, 1000),
+		zoneInfoItems: make([]*item.Item, 0, 4),
 	}
 	rs, err := ob.LoadDB("d_zone", "*", "zoneID", map[string]interface{}{"zoneID": zoneId})
 	if err != nil {
@@ -120,6 +123,8 @@ func NewZone(zoneId int) (*Zone, error) {
 	ob.mpExpque = make(map[int]bool, 1000)
 	// 加载地形
 	ob._initField(rs["fieldTypeHow"])
+	// 初始化可以控索到物品的对象
+	ob._initInfoItems(rs["zoneInfoItems"])
 	// 初始华探索队列
 	ob.initExploreQueue()
 	fmt.Println("ZONE_DB加载", ob.zoneName, " 当前共有", len(ob.mpExpque), "探索队")
@@ -133,12 +138,24 @@ func NewZone(zoneId int) (*Zone, error) {
 	go func() {
 		for {
 			// 时钟10s执行一次
-			time.Sleep(time.Second * time.Duration(5))
+			time.Sleep(time.Second * time.Duration(10))
 			// 执行一次运算
 			ob.doAllExplore()
 		}
 	}()
 	return ob, nil
+}
+
+func (this *Zone) _initInfoItems(str string) {
+	arrs := strings.Split(str, ",")
+	for _, v := range arrs {
+		itemID := vatools.SInt(v)
+		ptItem, err := item.OBManageItem.GetCanchItem(itemID)
+		if err != nil {
+			continue
+		}
+		this.zoneInfoItems = append(this.zoneInfoItems, ptItem)
+	}
 }
 
 // 初始化Zone里的格子数
@@ -196,6 +213,14 @@ func (this *Zone) GetInfo() map[string]interface{} {
 	res["zoneName"] = this.zoneName
 	res["zoneMsg"] = this.zoneMsg
 	res["zoneFieldHow"] = this.GetHowField()
+	res["zoneLevel"] = this.zoneLevel
+	res["zoneFood"] = this.zoneFood
+	res["zoneImg"] = this.zoneImg
+	zoneInfoItems := make([]map[string]interface{}, len(this.zoneInfoItems))
+	for k, ptItem := range this.zoneInfoItems {
+		zoneInfoItems[k] = ptItem.GetFieldInfo()
+	}
+	res["zoneInfoItems"] = zoneInfoItems
 	return res
 }
 

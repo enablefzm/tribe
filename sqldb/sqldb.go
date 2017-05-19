@@ -85,8 +85,8 @@ func Update(table string, info, key map[string]interface{}) (sql.Result, error) 
 func GetNaviDB() (*DBs, error) {
 	var err error
 	if naviDB == nil {
-		naviDB, err = NewDBs("tribe", "127.0.0.1", "3316", "navuser01", "fzmvava6", 10, 3)
-		// naviDB, err = NewDBs("tribe", "120.76.140.40", "3316", "navuser01", "fzmvava6", 10, 3)
+		cfg := NewSqlDbCfg()
+		naviDB, err = NewDBs(cfg.DBName, cfg.Address, cfg.Port, cfg.User, cfg.Pass, cfg.MaxConn, cfg.MinConn)
 	}
 	if err != nil {
 		fmt.Println("SQL ERROR:", err.Error())

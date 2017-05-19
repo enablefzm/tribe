@@ -16,6 +16,10 @@ func NewLead(id int) *Lead {
 		ob = newCreateLead(id)
 		ob.name = ""
 		ob.isNew = true
+		// 构造玩家已开启的Zone信息
+		ob.obZones = &LeadZones{
+			zones: []*LeadZone{&LeadZone{id: 1001}},
+		}
 		fmt.Println("Lead 数据库里没有，新建玩家角色", id)
 	}
 	return ob
@@ -33,6 +37,7 @@ func newLeadInDB(id int) (*Lead, error) {
 	rs := rss[0]
 	ob.name = rs["name"]
 	ob.isNew = false
+	ob.obZones = NewLeadZonesOnStr(rs["zones"])
 	fmt.Println("Lead 从数据库里检索玩家", id)
 	return ob, nil
 }
@@ -57,6 +62,7 @@ type Lead struct {
 	isNew      bool
 	obExplores *ExploreQueues
 	obBag      *item.Bag
+	obZones    *LeadZones
 	lk         *sync.Mutex
 	isOnline   bool
 }
@@ -98,6 +104,7 @@ func (this *Lead) GetFieldInfo() map[string]interface{} {
 	infoResource["conch"] = this.OBResource.Conch()
 	infoResource["food"] = this.OBResource.Food()
 	info["resource"] = infoResource
+	info["zones"] = this.obZones.GetZonesInfo()
 	return info
 }
 
@@ -132,6 +139,11 @@ func (this *Lead) GetBag() *item.Bag {
 	return this.obBag
 }
 
+// 获取玩家的Zones信息对象
+func (this *Lead) GetZones() *LeadZones {
+	return this.obZones
+}
+
 // 保存玩家所有数据
 //	@return
 //		nil
@@ -147,6 +159,7 @@ func (this *Lead) SaveAll() {
 func (this *Lead) Save() error {
 	info := make(map[string]interface{})
 	info["name"] = this.name
+	info["zones"] = this.obZones.GetSaveJson()
 	if this.isNew {
 		info["id"] = this.id
 		_, err := sqldb.Insert("u_lead", info)
