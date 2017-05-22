@@ -10,6 +10,7 @@ import (
 	"tribe/baseob"
 	"tribe/gameroom/event"
 	"tribe/gameroom/item"
+	"tribe/gameroom/npc"
 	"tribe/sqldb"
 	"vava6/vatools"
 )
@@ -86,21 +87,24 @@ func (this *ManageZone) Save() error {
 //	玩家探索的区域
 type Zone struct {
 	baseob.BaseOB
-	zoneID        int                // zoneID
-	zoneName      string             // zone名称
-	zoneLevel     int                // 等级
-	zoneType      int8               // zone类型 0-PVE 1-PVP
-	zoneArea      int                // zone面积
-	zoneFood      int                // zone消耗的食物的基数
-	zoneImg       string             // 图标
-	zoneMsg       string             // 描述
-	zoneInfoItems []*item.Item       // 这个区域可以掉落的物品信息
-	zoneEvents    []*event.Event     // 事件列表共公事件
-	mpExpque      map[int]bool       // 当前Zone探索中的探索队伍
-	mpField       map[int]*FieldZone // 格子对象
-	lk            *sync.RWMutex      // mpExpque锁
-	chExpQue      chan *ExploreQueue // 添加到当前探索队列
-	tmpHowField   uint16             // 临时存放的可以生成的格子数量
+	zoneID        int                      // zoneID
+	zoneName      string                   // zone名称
+	zoneLevel     int                      // 等级
+	zoneType      int8                     // zone类型 0-PVE 1-PVP
+	zoneArea      int                      // zone面积
+	zoneFood      int                      // zone消耗的食物的基数
+	zoneImg       string                   // 图标
+	zoneMsg       string                   // 描述
+	zoneInfoItems []*item.Item             // 这个区域可以掉落的物品信息
+	zoneInfoNpcs  []*npc.Monster           // 这个区域可以被发现的怪物
+	zoneEvents    []*event.Event           // 事件列表共公事件
+	mpExpque      map[int]bool             // 当前Zone探索中的探索队伍
+	mpField       map[int]*FieldZone       // 格子对象
+	lk            *sync.RWMutex            // mpExpque锁
+	chExpQue      chan *ExploreQueue       // 添加到当前探索队列
+	tmpHowField   uint16                   // 临时存放的可以生成的格子数量
+	tmpInfoItems  []map[string]interface{} // 临时存放的物品信息
+	tmpInfoNpcs   []map[string]interface{} // 临时存放的NPC信息
 }
 
 func NewZone(zoneId int) (*Zone, error) {
@@ -110,6 +114,7 @@ func NewZone(zoneId int) (*Zone, error) {
 		mpField:       make(map[int]*FieldZone, 10),
 		chExpQue:      make(chan *ExploreQueue, 1000),
 		zoneInfoItems: make([]*item.Item, 0, 4),
+		zoneInfoNpcs:  make([]*npc.Monster, 0, 4),
 	}
 	rs, err := ob.LoadDB("d_zone", "*", "zoneID", map[string]interface{}{"zoneID": zoneId})
 	if err != nil {
@@ -125,6 +130,7 @@ func NewZone(zoneId int) (*Zone, error) {
 	ob._initField(rs["fieldTypeHow"])
 	// 初始化可以控索到物品的对象
 	ob._initInfoItems(rs["zoneInfoItems"])
+	ob._initInfoNpc(rs["zoneInfoNpc"])
 	// 初始华探索队列
 	ob.initExploreQueue()
 	fmt.Println("ZONE_DB加载", ob.zoneName, " 当前共有", len(ob.mpExpque), "探索队")
@@ -158,6 +164,18 @@ func (this *Zone) _initInfoItems(str string) {
 	}
 }
 
+func (this *Zone) _initInfoNpc(str string) {
+	arrs := strings.Split(str, ",")
+	for _, v := range arrs {
+		npcID := vatools.SInt(v)
+		ptMonster, err := npc.NewMonster(npcID)
+		if err != nil {
+			continue
+		}
+		this.zoneInfoNpcs = append(this.zoneInfoNpcs, ptMonster)
+	}
+}
+
 // 初始化Zone里的格子数
 func (this *Zone) _initField(str string) {
 	arrs := strings.Split(str, ",")
@@ -181,6 +199,26 @@ func (this *Zone) _initField(str string) {
 			}
 		}
 	}
+}
+
+func (this *Zone) _getTmpInfoItems() []map[string]interface{} {
+	if this.tmpInfoItems == nil {
+		this.tmpInfoItems = make([]map[string]interface{}, len(this.zoneInfoItems))
+		for k, v := range this.zoneInfoItems {
+			this.tmpInfoItems[k] = v.GetFieldInfo()
+		}
+	}
+	return this.tmpInfoItems
+}
+
+func (this *Zone) _getTmpInfoNpcs() []map[string]interface{} {
+	if this.tmpInfoNpcs == nil {
+		this.tmpInfoNpcs = make([]map[string]interface{}, len(this.zoneInfoNpcs))
+		for k, v := range this.zoneInfoNpcs {
+			this.tmpInfoNpcs[k] = v.GetFieldInfo()
+		}
+	}
+	return this.tmpInfoNpcs
 }
 
 // 获取Zone名称
@@ -216,11 +254,8 @@ func (this *Zone) GetInfo() map[string]interface{} {
 	res["zoneLevel"] = this.zoneLevel
 	res["zoneFood"] = this.zoneFood
 	res["zoneImg"] = this.zoneImg
-	zoneInfoItems := make([]map[string]interface{}, len(this.zoneInfoItems))
-	for k, ptItem := range this.zoneInfoItems {
-		zoneInfoItems[k] = ptItem.GetFieldInfo()
-	}
-	res["zoneInfoItems"] = zoneInfoItems
+	res["zoneInfoItems"] = this._getTmpInfoItems()
+	res["zoneInfoNpcs"] = this._getTmpInfoNpcs()
 	return res
 }
 
